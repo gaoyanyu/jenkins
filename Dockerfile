@@ -1,2 +1,2 @@
-FROM hub.easystack.io/production/escloud-linux-source-busybox:latest
+FROM hub.easystack.io/arm64v8/escloud-linux-source-busybox:latest
 RUN yum install -y vsftpd
