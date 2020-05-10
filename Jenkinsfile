@@ -11,42 +11,75 @@ spec:
   nodeSelector:
     openstack-control-plane: enabled
   containers:
-  - name: docker-dind
-    image: hub.easystack.io/production/docker:dind-with-test-dockerfile
-    imagePullPolicy: Always
+  - name: jnlp
+    image: hub.easystack.io/production/jnlp-slave:3.27-1
+  - name: docker
+    image: hub.easystack.io/production/docker:19.03.1
+    imagePullPolicy: IfNotPresent
+    command:
+    - sleep
+    args:
+    - 99d
+    tty: true
     env:
-    - name: DOCKER_HOST
-      value: tcp://localhost:2375
+      - name: DOCKER_HOST
+        value: tcp://localhost:2375
+    volumeMounts:
+      - name: docker-config
+        mountPath: /root/Dockerfile
+        subPath: Dockerfile
+  - name: docker-daemon
+    image: hub.easystack.io/production/docker:dind
+    imagePullPolicy: IfNotPresent
+    tty: true
     securityContext:
       privileged: true
+    env:
+      - name: DOCKER_TLS_CERTDIR
+        value: ""
+      - name: JENKINS_HARBOR_USER
+        valueFrom:
+          configMapKeyRef:
+            name: jenkins-harbor
+            key: HARBOR_USER
+      - name: JENKINS_HARBOR_PASSWD
+        valueFrom:
+          configMapKeyRef:
+            name: jenkins-harbor
+            key: HARBOR_PASSWD
     volumeMounts:
-      - name: daemon-json
-        mountPath: /etc/docker/daemon.json
-      - name: docker-build
-        mountPath: /root/Dockerfile
       - name: dind-storage
         mountPath: /var/lib/docker
+      - name: docker-config
+        mountPath: /etc/docker/daemon.json
+        subPath: daemon.json
   volumes:
-    - name: daemon-json
-      hostPath:
-        path: /etc/docker/daemon.json
-    - name: docker-build
-      hostPath:
-        path: /root/Dockerfile
     - name: dind-storage
       emptyDir: {}
+    - name: docker-config
+      configMap:
+        name: jenkins-harbor
 """
     }
   }
   stages {
+    stage('login to harbor') {
+      steps {
+        container('docker-daemon') {
+          sh 'sleep 60'
+          sh 'cd /root/ && docker login hub.easystack.io -u ${JENKINS_HARBOR_USER} -p ${JENKINS_HARBOR_PASSWD}'
+        }
+      }
+    }
     stage('Build docker image') {
       steps {
-        container('docker-dind') {
-          sh 'cd /root && sleep 100'
-          //sh 'dockerd -H tcp://0.0.0.0:2376'
-          sh 'cd /root && docker build -t ubuntu-with-vi-dockerfile .'
-          sh 'cd /root && docker images'
-          sh 'cd /root && sleep 600'
+        container('docker') {
+          sh 'cd /root/ && sleep 60'
+          //sh 'cd /root/ && cp /root/Dockerfile /home/jenkins/agent/workspace/test/Dockerfile'
+          sh 'cd /home/jenkins/agent/workspace/test_master && docker build -t hub.easystack.io/production/testing-docker-in-docker:latest .'
+          sh 'cd /root/ && docker images'
+          sh 'cd /root/ && sleep 3600'
+          sh 'docker push hub.easystack.io/production/testing-docker-in-docker:latest'
         }
       }
     }
