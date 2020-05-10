@@ -12,9 +12,9 @@ spec:
     openstack-control-plane: enabled
   containers:
   - name: jnlp
-    image: hub.easystack.io/production/jnlp-slave:3.27-1
+    image: hub.easystack.io/arm64v8/jnlp-slave:3.27-1
   - name: docker
-    image: hub.easystack.io/production/docker:19.03.1
+    image: hub.easystack.io/arm64v8/docker:19.03.1
     imagePullPolicy: IfNotPresent
     command:
     - sleep
@@ -29,7 +29,7 @@ spec:
         mountPath: /root/Dockerfile
         subPath: Dockerfile
   - name: docker-daemon
-    image: hub.easystack.io/production/docker:dind
+    image: hub.easystack.io/arm64v8/docker:dind
     imagePullPolicy: IfNotPresent
     tty: true
     securityContext:
@@ -75,10 +75,11 @@ spec:
       steps {
         container('docker') {
           sh 'cd /root/ && sleep 60'
-          //sh 'cd /root/ && cp /root/Dockerfile /home/jenkins/agent/workspace/test/Dockerfile'
           sh 'cd /home/jenkins/agent/workspace/test_master && docker build -t hub.easystack.io/production/testing-docker-in-docker:latest .'
+        }
+        container('docker-daemon') {
+          sh 'sleep 10'
           sh 'cd /root/ && docker images'
-          sh 'cd /root/ && sleep 3600'
           sh 'docker push hub.easystack.io/production/testing-docker-in-docker:latest'
         }
       }
